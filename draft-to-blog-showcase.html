@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>学习工作赛道 - DraftToBlog 创意方案</title>
+  <style>
+    :root {
+      --ink: #172026;
+      --muted: #5f6f7a;
+      --line: #d9e2e8;
+      --paper: #ffffff;
+      --soft: #f5f8fa;
+      --accent: #0d7f73;
+      --accent-2: #2864b4;
+      --warn: #b85b18;
+      --dark: #20303a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: var(--soft);
+      line-height: 1.65;
+    }
+
+    .hero {
+      min-height: 92vh;
+      display: grid;
+      align-items: center;
+      padding: 56px 24px 40px;
+      color: #fff;
+      background:
+        linear-gradient(110deg, rgba(18, 31, 38, .94), rgba(22, 55, 61, .84)),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='900' viewBox='0 0 1400 900'%3E%3Crect width='1400' height='900' fill='%23dfe7ec'/%3E%3Cg opacity='.55'%3E%3Crect x='90' y='84' width='430' height='620' rx='18' fill='%23ffffff'/%3E%3Crect x='128' y='134' width='282' height='18' rx='9' fill='%236f8794'/%3E%3Crect x='128' y='188' width='328' height='12' rx='6' fill='%23b8c8d0'/%3E%3Crect x='128' y='226' width='250' height='12' rx='6' fill='%23b8c8d0'/%3E%3Crect x='128' y='280' width='326' height='160' rx='12' fill='%2399b4c0'/%3E%3Crect x='128' y='476' width='306' height='12' rx='6' fill='%23b8c8d0'/%3E%3Crect x='128' y='514' width='256' height='12' rx='6' fill='%23b8c8d0'/%3E%3Crect x='860' y='138' width='430' height='620' rx='18' fill='%23ffffff'/%3E%3Crect x='898' y='188' width='270' height='18' rx='9' fill='%232864b4'/%3E%3Crect x='898' y='242' width='318' height='12' rx='6' fill='%23b8c8d0'/%3E%3Crect x='898' y='280' width='240' height='12' rx='6' fill='%23b8c8d0'/%3E%3Crect x='898' y='334' width='326' height='160' rx='12' fill='%230d7f73'/%3E%3Crect x='898' y='532' width='306' height='12' rx='6' fill='%23b8c8d0'/%3E%3Crect x='898' y='570' width='256' height='12' rx='6' fill='%23b8c8d0'/%3E%3Cpath d='M560 365h220' stroke='%230d7f73' stroke-width='18' stroke-linecap='round'/%3E%3Cpath d='M746 315l64 50-64 50' fill='none' stroke='%230d7f73' stroke-width='18' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/g%3E%3C/svg%3E");
+      background-size: cover;
+      background-position: center;
+    }
+
+    .hero-inner {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 32px;
+      padding: 5px 12px;
+      border: 1px solid rgba(255, 255, 255, .34);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .12);
+      font-size: 14px;
+      color: #e8f4f2;
+    }
+
+    h1 {
+      max-width: 860px;
+      margin: 24px 0 16px;
+      font-size: clamp(38px, 7vw, 76px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 760px;
+      margin: 0;
+      font-size: clamp(17px, 2.2vw, 24px);
+      color: #e3ecef;
+    }
+
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      max-width: 760px;
+      margin-top: 36px;
+    }
+
+    .metric {
+      border-left: 3px solid #35c0ad;
+      padding: 6px 0 6px 14px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1.1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 4px;
+      color: #d8e6e9;
+      font-size: 14px;
+    }
+
+    main {
+      background: var(--paper);
+    }
+
+    section {
+      padding: 64px 24px;
+      border-top: 1px solid var(--line);
+    }
+
+    .wrap {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: clamp(26px, 4vw, 42px);
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 800px;
+      margin: 0 0 30px;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      min-height: 100%;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .card h3 {
+      margin: 0 0 10px;
+      font-size: 21px;
+      line-height: 1.3;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .capability {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .icon {
+      width: 72px;
+      height: 72px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: #e8f5f3;
+      color: var(--accent);
+      font-size: 34px;
+      font-weight: 700;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+      margin-top: 26px;
+    }
+
+    .step {
+      position: relative;
+      min-height: 96px;
+      padding: 16px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      text-align: center;
+      font-size: 14px;
+      color: var(--dark);
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--accent-2);
+      font-size: 18px;
+    }
+
+    .value-band {
+      background: #edf6f4;
+    }
+
+    .quote {
+      max-width: 960px;
+      margin: 0;
+      font-size: clamp(24px, 4vw, 40px);
+      line-height: 1.32;
+      color: #163a36;
+    }
+
+    .footer {
+      padding: 34px 24px;
+      background: var(--dark);
+      color: #dbe7eb;
+    }
+
+    .footer .wrap {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 860px) {
+      .hero {
+        min-height: 86vh;
+        padding-top: 42px;
+      }
+
+      .hero-metrics,
+      .grid-2,
+      .grid-3,
+      .steps {
+        grid-template-columns: 1fr;
+      }
+
+      .capability {
+        grid-template-columns: 1fr;
+      }
+
+      .icon {
+        width: 56px;
+        height: 56px;
+        font-size: 27px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <span class="tag">学习工作赛道 · 自动化文档转换工具</span>
+      <h1>DraftToBlog</h1>
+      <p class="subtitle">把飞书导出的 Markdown 工作草稿，自动完成图片上云、博客化重构与隐私脱敏，一键生成可公开分享的标准化博客网页。</p>
+      <div class="hero-metrics" aria-label="核心价值">
+        <div class="metric">
+          <strong>10 秒</strong>
+          <span>完成原本 10-30 分钟的改稿流程</span>
+        </div>
+        <div class="metric">
+          <strong>0 裂图</strong>
+          <span>本地图片自动迁移为 HTTPS 外链</span>
+        </div>
+        <div class="metric">
+          <strong>可核对</strong>
+          <span>脱敏记录可视化，降低泄密风险</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <div class="wrap">
+        <h2>产品定位</h2>
+        <p class="lead">DraftToBlog 面向职场人、开发者和内容创作者，专注解决“工作文档无法顺手变成公开博客”的问题。它不破坏原始文件，而是输出一份适合公开传播的新文档与网页。</p>
+        <div class="grid grid-3">
+          <article class="card">
+            <h3>图片资源孤岛</h3>
+            <p>飞书导出的 Markdown 图片多为本地绝对路径或缓存路径，发布到博客后容易全部裂图。</p>
+          </article>
+          <article class="card">
+            <h3>内容形态不匹配</h3>
+            <p>工作记录常是流水账、备忘录和台账，缺少公开博客需要的引导、层次和教学逻辑。</p>
+          </article>
+          <article class="card">
+            <h3>隐私泄露风险</h3>
+            <p>文档中常混有公司名称、项目代号、账号、内网地址和未公开业务信息，手动脱敏容易遗漏。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>三大核心能力</h2>
+        <p class="lead">围绕“能不能发、好不好读、安不安全”三个关键问题，DraftToBlog 将文档发布流程压缩成一次上传和一次确认。</p>
+        <div class="grid grid-3">
+          <article class="card capability">
+            <div class="icon">1</div>
+            <div>
+              <h3>图片云端迁移</h3>
+              <p>批量解析 Markdown 中的本地图片路径，自动上传到云图床，并将全文链接替换为可公开访问的 HTTPS 地址。</p>
+            </div>
+          </article>
+          <article class="card capability">
+            <div class="icon">2</div>
+            <div>
+              <h3>博客化重构</h3>
+              <p>自动补全引言、重排章节、润色语句、统一标题与代码块格式，让内部记录变成教程式分享文章。</p>
+            </div>
+          </article>
+          <article class="card capability">
+            <div class="icon">3</div>
+            <div>
+              <h3>智能脱敏过滤</h3>
+              <p>识别公司、项目、人名、手机号、账号、内网地址等敏感内容，支持替换、整行过滤和脱敏日志核对。</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="value-band">
+      <div class="wrap">
+        <h2>完整闭环</h2>
+        <p class="lead">从工作场景中的飞书文档开始，到公开可访问的博客网页结束，工具承担中间重复、繁琐且有风险的转换工作。</p>
+        <div class="steps">
+          <div class="step"><strong>01</strong>飞书写文档</div>
+          <div class="step"><strong>02</strong>导出 MD</div>
+          <div class="step"><strong>03</strong>本地上传</div>
+          <div class="step"><strong>04</strong>图片换链</div>
+          <div class="step"><strong>05</strong>结构重构</div>
+          <div class="step"><strong>06</strong>智能脱敏</div>
+          <div class="step"><strong>07</strong>生成网页</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>用户与场景</h2>
+        <div class="grid grid-2">
+          <article class="card">
+            <h3>核心用户</h3>
+            <p>需要沉淀工作经验的开发者、产品经理、运营同学、技术写作者、知识管理爱好者，以及经常从飞书整理资料的团队成员。</p>
+          </article>
+          <article class="card">
+            <h3>典型场景</h3>
+            <p>项目复盘、问题排查记录、工具教程、学习笔记、流程文档、经验分享等内容完成后，希望快速转成可公开传播的博客页面。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>价值与意义</h2>
+        <p class="quote">DraftToBlog 的价值不是简单“格式转换”，而是把工作产出转化为个人知识资产：更高效、更安全，也更适合长期沉淀与公开分享。</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <span>DraftToBlog · 创意方案展示 HTML</span>
+      <span>学习工作赛道</span>
+    </div>
+  </footer>
+</body>
+</html>
