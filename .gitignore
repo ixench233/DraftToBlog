@@ -1,0 +1,35 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# React / Node
+node_modules/
+dist/
+.vite/
+
+# Runtime data
+data/tmp/
+data/uploads/
+data/exports/
+logs/
+*-server.log
+*-server.error.log
+
+# IDE and OS
+.idea/
+.vscode/
+**/.claude/settings.local.json
+.DS_Store
+Thumbs.db
+
+# Local source archives
+MarkFlow.zip

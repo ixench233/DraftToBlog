@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "markflow"
+version = "0.1.0"
+description = "Convert PDF/DOCX documents to Hexo/Hugo Markdown blog posts"
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12",
+    "rich>=13",
+    "pydantic>=2",
+    "pydantic-settings>=2",
+    "pyyaml>=6",
+    "python-docx>=1.1",
+    "pdfplumber>=0.11",
+    "pymupdf>=1.24",
+    "cos-python-sdk-v5>=1.9",
+    "openai>=1.30",
+    "httpx>=0.27",
+    "langdetect>=1.0.9",
+    "pillow>=10",
+]
+
+[project.scripts]
+markflow = "markflow.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["markflow"]
