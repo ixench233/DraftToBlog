@@ -29,6 +29,14 @@ export interface DocumentData {
   stats: DocumentStats
   findings: Finding[]
   warnings: string[]
+  assets: Array<{
+    filename: string
+    local_path: string
+    status: 'pending' | 'uploaded' | 'failed'
+    url: string
+    provider: string
+    error: string
+  }>
 }
 
 export interface ConfigStatus {
@@ -37,6 +45,10 @@ export interface ConfigStatus {
   cos_ready: boolean
   picgo_configured: boolean
   mock_mode: boolean
+  app_public_url: string
+  frontend_public_url: string
+  deployment_configured: boolean
+  app_secret_configured: boolean
 }
 
 export interface AiSettings {
@@ -44,4 +56,3 @@ export interface AiSettings {
   apiKey: string
   model: string
 }
-

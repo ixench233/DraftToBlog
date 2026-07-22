@@ -34,11 +34,28 @@ class DocumentResponse(BaseModel):
     stats: DocumentStats
     findings: list[Finding]
     warnings: list[str] = Field(default_factory=list)
+    assets: list["Asset"] = Field(default_factory=list)
+
+
+class Asset(BaseModel):
+    filename: str
+    local_path: str
+    status: Literal["pending", "uploaded", "failed"] = "pending"
+    url: str = ""
+    provider: str = ""
+    error: str = ""
+
+
+class AIConfig(BaseModel):
+    base_url: str = Field(min_length=1, max_length=500)
+    api_key: str = Field(min_length=1, max_length=500)
+    model: str = Field(min_length=1, max_length=200)
 
 
 class ProcessRequest(BaseModel):
     finding_ids: list[str] = Field(default_factory=list)
     improve_structure: bool = True
+    ai_config: AIConfig | None = None
 
 
 class ConfigStatus(BaseModel):
@@ -47,4 +64,8 @@ class ConfigStatus(BaseModel):
     cos_ready: bool
     picgo_configured: bool
     mock_mode: bool
+    app_public_url: str
+    frontend_public_url: str
+    deployment_configured: bool
+    app_secret_configured: bool
 

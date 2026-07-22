@@ -10,6 +10,8 @@ import fitz
 from docx import Document
 
 from ..storage import store
+from .ai_service import improve_article, resolve_connection
+from .media_service import append_uploaded_assets, upload_task_assets
 
 
 SUPPORTED_EXTENSIONS = {".md": "markdown", ".markdown": "markdown", ".docx": "docx", ".pdf": "pdf"}
@@ -47,6 +49,17 @@ def analyze_upload(filename: str, content: bytes) -> dict[str, Any]:
         raise ValueError("没有从文件中提取到可处理的文字内容。")
 
     findings = find_sensitive_content(text)
+    asset_records = [
+        {
+            "filename": f"image-{index}{suffix}",
+            "local_path": f"assets/image-{index}{suffix}",
+            "status": "pending",
+            "url": "",
+            "provider": "",
+            "error": "",
+        }
+        for index, (suffix, _) in enumerate(images if source_type in {"docx", "pdf"} else [], start=1)
+    ]
     payload: dict[str, Any] = {
         "id": task_id,
         "filename": Path(filename).name,
@@ -62,6 +75,7 @@ def analyze_upload(filename: str, content: bytes) -> dict[str, Any]:
         },
         "findings": findings,
         "warnings": warnings,
+        "assets": asset_records,
     }
     store.create(task_id, payload)
 
@@ -121,7 +135,12 @@ def find_sensitive_content(text: str) -> list[dict[str, Any]]:
     return sorted(findings, key=lambda item: item["start"])
 
 
-def process_document(task_id: str, finding_ids: list[str], improve_structure: bool) -> dict[str, Any]:
+def process_document(
+    task_id: str,
+    finding_ids: list[str],
+    improve_structure: bool,
+    ai_config: object | None = None,
+) -> dict[str, Any]:
     payload = store.get(task_id)
     if not payload:
         raise FileNotFoundError(task_id)
@@ -132,8 +151,28 @@ def process_document(task_id: str, finding_ids: list[str], improve_structure: bo
     for finding in sorted(replacements, key=lambda item: item["start"], reverse=True):
         text = text[: finding["start"]] + finding["replacement"] + text[finding["end"] :]
 
+    assets = payload.get("assets", [])
+    if assets:
+        upload_task_assets(task_id, assets)
+        payload["assets"] = assets
+        # Persist successful uploads before calling AI so retries never upload
+        # the same document images again when the model fails or times out.
+        store.update(task_id, payload)
+        failed = [item for item in assets if item.get("status") == "failed"]
+        if failed:
+            message = f"{len(failed)} 张图片上传失败，已保留本地任务文件。"
+            if message not in payload["warnings"]:
+                payload["warnings"].append(message)
+
     if improve_structure:
-        text = _improve_structure(text, payload["filename"])
+        connection = resolve_connection(ai_config)
+        if connection:
+            text = improve_article(text, payload["filename"], connection)
+        else:
+            text = _improve_structure(text, payload["filename"])
+
+    if assets:
+        text = append_uploaded_assets(text, assets)
 
     for finding in payload["findings"]:
         finding["accepted"] = finding["id"] in selected
@@ -223,4 +262,3 @@ def _improve_structure(text: str, filename: str) -> str:
         return normalized + "\n\n---\n\n> 本文由 DraftToBlog 完成格式整理与隐私检查，请在发布前人工复核。"
     title = Path(filename).stem.replace("-", " ").strip() or "整理后的文章"
     return f"# {title}\n\n{normalized}\n\n---\n\n> 本文由 DraftToBlog 完成格式整理与隐私检查，请在发布前人工复核。"
-

@@ -6,5 +6,5 @@ python-docx==1.2.0
 PyMuPDF==1.26.3
 reportlab==4.4.3
 httpx==0.28.1
+cos-python-sdk-v5==1.9.44
 pytest==8.4.1
-

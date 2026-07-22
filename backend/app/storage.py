@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any
 
 from .config import settings
+
+UTC = timezone.utc
 
 
 class TaskStore:
@@ -79,4 +81,3 @@ class TaskStore:
 
 
 store = TaskStore(settings.temp_dir)
-

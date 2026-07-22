@@ -26,6 +26,7 @@ import {
   createDemo,
   downloadExport,
   getConfigStatus,
+  getAssetUrl,
   processDocument,
 } from './api'
 import type { AiSettings, ConfigStatus, DocumentData } from './types'
@@ -247,7 +248,7 @@ function UploadCard({ loading, error, onFile, onDemo }: UploadCardProps) {
           accept=".pdf,.docx,.md,.markdown"
           onChange={(event) => select(event.target.files)}
         />
-        <span className="file-hint">支持 PDF、DOCX、Markdown · 最大 20 MB</span>
+        <span className="file-hint">支持 PDF、DOCX、Markdown · 不限制文件大小</span>
       </div>
       {error && <div className="inline-error" role="alert"><AlertCircle size={17} />{error}</div>}
       <div className="demo-row">
@@ -276,7 +277,9 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
     setProcessing(true)
     onError('')
     try {
-      const result = await processDocument(data.id, [...selectedFindings], improveStructure)
+      const savedAiConfig = sessionStorage.getItem('dtb-ai-settings')
+      const aiConfig = savedAiConfig ? JSON.parse(savedAiConfig) as AiSettings : undefined
+      const result = await processDocument(data.id, [...selectedFindings], improveStructure, aiConfig)
       onChange(result)
       setPreviewMode('processed')
     } catch (requestError) {
@@ -361,6 +364,27 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
           </div>
           <article className="document-preview" aria-label={`${previewMode === 'original' ? '原始' : '整理后'}文档内容`}>
             {preview.split('\n').map((line, index) => <PreviewLine key={`${index}-${line.slice(0, 8)}`} line={line} />)}
+            {data.assets.length > 0 && (
+              <section className="document-images" aria-label="文档图片">
+                <h3>文档图片</h3>
+                <div className="document-image-grid">
+                  {data.assets.map((asset) => (
+                    <figure key={asset.filename}>
+                      <img
+                        src={asset.url || getAssetUrl(data.id, asset.filename)}
+                        alt={asset.filename}
+                        loading="lazy"
+                      />
+                      <figcaption>
+                        {asset.filename}
+                        {asset.status === 'uploaded' && <span>已上传</span>}
+                        {asset.status === 'failed' && <span className="image-failed">上传失败</span>}
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              </section>
+            )}
           </article>
         </div>
 
@@ -371,7 +395,7 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
           <label className="option-card">
             <input type="checkbox" checked={improveStructure} onChange={(event) => setImproveStructure(event.target.checked)} />
             <span className="check-control" aria-hidden="true"><Check size={14} /></span>
-            <span><strong>基础结构整理</strong><small>规范标题和空行，不调用 AI，不改写事实</small></span>
+            <span><strong>AI 内容优化</strong><small>优化标题、结构和表达；未配置 AI 时自动使用本地基础整理</small></span>
           </label>
 
           <div className="finding-section">
@@ -402,6 +426,17 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
             {processing ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}
             {processing ? '正在整理…' : data.status === 'processed' ? '重新应用设置' : '生成发布版本'}
           </button>
+
+          {error && (
+            <div className="processing-error" role="alert" aria-live="assertive">
+              <AlertCircle size={19} />
+              <div>
+                <strong>生成失败</strong>
+                <p>{error}</p>
+                <small>文档原文和当前设置均已保留，请修正配置后重试。</small>
+              </div>
+            </div>
+          )}
 
           <div className="export-section">
             <div className="section-title-row"><div><h3>导出文件</h3><span>可随时导出当前结果</span></div><Download size={19} /></div>
