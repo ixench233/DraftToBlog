@@ -289,7 +289,7 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
     }
   }
 
-  async function runExport(format: 'markdown' | 'docx' | 'pdf') {
+  async function runExport(format: 'markdown' | 'hexo' | 'hugo' | 'docx' | 'pdf') {
     setExporting(format)
     onError('')
     try {
@@ -441,10 +441,10 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
           <div className="export-section">
             <div className="section-title-row"><div><h3>导出文件</h3><span>可随时导出当前结果</span></div><Download size={19} /></div>
             <div className="export-grid">
-              {(['markdown', 'docx', 'pdf'] as const).map((format) => (
+              {(['markdown', 'hexo', 'hugo', 'docx', 'pdf'] as const).map((format) => (
                 <button key={format} type="button" onClick={() => runExport(format)} disabled={Boolean(exporting)}>
                   {exporting === format ? <LoaderCircle className="spin" size={17} /> : <Download size={17} />}
-                  {format === 'markdown' ? 'Markdown' : format.toUpperCase()}
+                  {format === 'markdown' ? 'Markdown' : format === 'hexo' ? 'Hexo MD' : format === 'hugo' ? 'Hugo MD' : format.toUpperCase()}
                 </button>
               ))}
             </div>

@@ -2,16 +2,13 @@ from __future__ import annotations
 
 import re
 import uuid
-from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-import fitz
-from docx import Document
-
 from ..storage import store
 from .ai_service import improve_article, resolve_connection
-from .media_service import append_uploaded_assets, upload_task_assets
+from .blog_service import blocks_to_markdown, inject_asset_images, parse_docx, parse_pdf
+from .media_service import upload_task_assets
 
 
 SUPPORTED_EXTENSIONS = {".md": "markdown", ".markdown": "markdown", ".docx": "docx", ".pdf": "pdf"}
@@ -37,13 +34,20 @@ def analyze_upload(filename: str, content: bytes) -> dict[str, Any]:
     if source_type == "markdown":
         text, image_count, markdown_warnings = _parse_markdown(content)
         warnings.extend(markdown_warnings)
+        images: list[tuple[str, bytes]] = []
     elif source_type == "docx":
-        text, images = _parse_docx(content)
+        parsed = parse_docx(content)
+        text = blocks_to_markdown(parsed)
+        images = [(f".{image.ext}", image.data) for image in parsed.images]
         image_count = len(images)
     else:
-        text, images, pdf_warnings = _parse_pdf(content)
+        parsed = parse_pdf(content)
+        text = blocks_to_markdown(parsed)
+        images = [(f".{image.ext}", image.data) for image in parsed.images]
         image_count = len(images)
-        warnings.extend(pdf_warnings)
+        if not text.strip():
+            warnings.append("PDF text extraction returned no text; images were preserved when possible.")
+            text = "\n\n".join(f"[IMG_{index}]" for index in range(len(images)))
 
     if not text.strip():
         raise ValueError("没有从文件中提取到可处理的文字内容。")
@@ -172,7 +176,7 @@ def process_document(
             text = _improve_structure(text, payload["filename"])
 
     if assets:
-        text = append_uploaded_assets(text, assets)
+        text = inject_asset_images(text, assets)
 
     for finding in payload["findings"]:
         finding["accepted"] = finding["id"] in selected

@@ -19,6 +19,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer
 
+from .blog_service import render_blog_markdown
+
 
 MARKDOWN_IMAGE = re.compile(r"^!\[([^]]*)\]\((https?://[^)]+)\)$")
 
@@ -28,6 +30,12 @@ def export_document(payload: dict, format_name: str) -> tuple[bytes, str, str]:
     stem = _safe_stem(payload["filename"])
     if format_name == "markdown":
         return content.encode("utf-8"), f"{stem}.md", "text/markdown; charset=utf-8"
+    if format_name == "hexo":
+        blog = render_blog_markdown(content, payload["filename"], payload.get("assets", []), "hexo")
+        return blog.encode("utf-8"), f"{stem}.hexo.md", "text/markdown; charset=utf-8"
+    if format_name == "hugo":
+        blog = render_blog_markdown(content, payload["filename"], payload.get("assets", []), "hugo")
+        return blog.encode("utf-8"), f"{stem}.hugo.md", "text/markdown; charset=utf-8"
     if format_name == "docx":
         return _to_docx(content), f"{stem}.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     if format_name == "pdf":

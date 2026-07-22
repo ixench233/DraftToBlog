@@ -60,7 +60,7 @@ export function processDocument(
   })
 }
 
-export async function downloadExport(id: string, format: 'markdown' | 'docx' | 'pdf'): Promise<void> {
+export async function downloadExport(id: string, format: 'markdown' | 'hexo' | 'hugo' | 'docx' | 'pdf'): Promise<void> {
   const response = await fetch(`${API_BASE}/api/documents/${id}/export/${format}`)
   if (!response.ok) {
     const body = await response.json().catch(() => ({ detail: '导出失败，请稍后重试。' }))

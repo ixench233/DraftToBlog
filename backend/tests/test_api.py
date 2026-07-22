@@ -55,7 +55,7 @@ def test_markdown_workflow() -> None:
     assert "138****5678" in processed.json()["processed_content"]
     assert processed.json()["processed_content"].startswith("# AI 整理结果")
 
-    for format_name in ("markdown", "docx", "pdf"):
+    for format_name in ("markdown", "hexo", "hugo", "docx", "pdf"):
         exported = client.get(f"/api/documents/{payload['id']}/export/{format_name}")
         assert exported.status_code == 200
         assert exported.content
