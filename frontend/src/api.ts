@@ -1,6 +1,7 @@
 import type { ConfigStatus, DocumentData } from './types'
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+const configuredApiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '')
+const API_BASE = configuredApiBase || `${window.location.protocol}//${window.location.hostname}:8000`
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response

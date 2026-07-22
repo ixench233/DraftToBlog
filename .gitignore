@@ -18,6 +18,7 @@ dist/
 
 # Runtime data
 data/tmp/
+data/npm-cache/
 data/uploads/
 data/exports/
 logs/

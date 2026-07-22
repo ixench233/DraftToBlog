@@ -28,7 +28,10 @@ class Settings:
     frontend_public_url: str = os.getenv("FRONTEND_PUBLIC_URL", "")
     cors_origins: tuple[str, ...] = tuple(
         item.strip()
-        for item in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+        for item in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:5173,http://127.0.0.1:5173",
+        ).split(",")
         if item.strip()
     )
     max_upload_mb: int = int(os.getenv("MAX_UPLOAD_MB", "0"))
