@@ -43,12 +43,14 @@ class Settings:
     official_ai_model: str = os.getenv("OFFICIAL_AI_MODEL", "")
     official_ai_daily_request_limit: int = int(os.getenv("OFFICIAL_AI_DAILY_REQUEST_LIMIT", "100"))
     official_ai_max_input_chars: int = int(os.getenv("OFFICIAL_AI_MAX_INPUT_CHARS", "30000"))
-    official_ai_timeout_seconds: float = float(os.getenv("OFFICIAL_AI_TIMEOUT_SECONDS", "120"))
+    official_ai_timeout_seconds: float = float(os.getenv("OFFICIAL_AI_TIMEOUT_SECONDS", "300"))
+    official_ai_trust_env: bool = _as_bool(os.getenv("OFFICIAL_AI_TRUST_ENV"), default=True)
     allow_user_ai_config: bool = _as_bool(
         os.getenv("ALLOW_USER_AI_CONFIG"), default=True
     )
     picgo_bin: str = os.getenv("PICGO_BIN", "picgo")
     picgo_config_path: str = os.getenv("PICGO_CONFIG_PATH", "")
+    upload_provider: str = os.getenv("UPLOAD_PROVIDER", "auto").strip().lower()
     cos_secret_id: str = os.getenv("TENCENT_COS_SECRET_ID", "")
     cos_secret_key: str = os.getenv("TENCENT_COS_SECRET_KEY", "")
     cos_bucket: str = os.getenv("TENCENT_COS_BUCKET", "")
@@ -56,13 +58,26 @@ class Settings:
     cos_public_base_url: str = os.getenv("TENCENT_COS_PUBLIC_BASE_URL", "")
     cos_path_prefix: str = os.getenv("TENCENT_COS_PATH_PREFIX", "draft-to-blog/")
     cos_auto_delete_days: int = int(os.getenv("TENCENT_COS_AUTO_DELETE_DAYS", "7"))
+    cos_upload_workers: int = int(os.getenv("TENCENT_COS_UPLOAD_WORKERS", "2"))
     deploy_host: str = os.getenv("DEPLOY_HOST", "")
     deploy_port: int = int(os.getenv("DEPLOY_PORT", "22"))
     deploy_user: str = os.getenv("DEPLOY_USER", "")
+    deploy_password: str = os.getenv("DEPLOY_PASSWORD", os.getenv("PASSWORD", ""))
     deploy_path: str = os.getenv("DEPLOY_PATH", "")
     deploy_ssh_key_path: str = os.getenv("DEPLOY_SSH_KEY_PATH", "")
     deploy_domain: str = os.getenv("DEPLOY_DOMAIN", "")
     deploy_ssl_email: str = os.getenv("DEPLOY_SSL_EMAIL", "")
+    mysql_host: str = os.getenv("MYSQL_HOST", "127.0.0.1")
+    mysql_port: int = int(os.getenv("MYSQL_PORT", "3306"))
+    mysql_user: str = os.getenv("MYSQL_USER", "root")
+    mysql_password: str = os.getenv("MYSQL_PASSWORD", "123456")
+    mysql_database: str = os.getenv("MYSQL_DATABASE", "draft_to_blog")
+    default_user_name: str = os.getenv("DEFAULT_USER_NAME", "demo_user")
+    default_user_display_name: str = os.getenv("DEFAULT_USER_DISPLAY_NAME", "Demo User")
+    default_user_password: str = os.getenv("DEFAULT_USER_PASSWORD", "123456")
+    default_admin_name: str = os.getenv("DEFAULT_ADMIN_NAME", "admin")
+    default_admin_display_name: str = os.getenv("DEFAULT_ADMIN_DISPLAY_NAME", "Administrator")
+    default_admin_password: str = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123456")
 
     @property
     def official_ai_ready(self) -> bool:
@@ -90,6 +105,15 @@ class Settings:
     @property
     def deployment_configured(self) -> bool:
         return bool(self.deploy_host and self.deploy_user and self.deploy_path)
+
+    @property
+    def remote_upload_ready(self) -> bool:
+        return bool(
+            self.deploy_host
+            and self.deploy_user
+            and (self.deploy_password or self.deploy_ssh_key_path)
+            and self.cos_ready
+        )
 
 
 settings = Settings()

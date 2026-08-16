@@ -1,0 +1,123 @@
+from __future__ import annotations
+
+from io import BytesIO
+from pathlib import Path
+import sys
+
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
+from docx.shared import Inches, Pt, RGBColor
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "backend"))
+
+from app.services.blog_service import parse_docx
+
+
+SOURCE = ROOT / "data" / "input" / "数学建模论文写作.docx"
+OUTPUT = ROOT / "data" / "input" / "math-modeling-casual-image-test.docx"
+
+
+def set_font(run, *, size: int | None = None, color: RGBColor | None = None) -> None:
+    run.font.name = "Arial"
+    run._element.rPr.rFonts.set(qn("w:eastAsia"), "微软雅黑")
+    if size:
+        run.font.size = Pt(size)
+    if color:
+        run.font.color.rgb = color
+
+
+def main() -> None:
+    parsed = parse_docx(SOURCE.read_bytes())
+    image_map = {image.index + 1: image for image in parsed.images}
+
+    segments = [
+        (
+            [
+                "写数学建模论文的时候，标题其实不用想得太玄乎。比较稳妥的做法，是先看自己这篇文章到底用了什么主要模型，或者解决问题时最核心的方法是什么，然后围绕这个点去起名字。标题最好一眼能让人知道你在研究什么，太长、太绕、太像口号，反而会让评委读起来有点累。",
+                "原文里提到的这个思路挺实用：不要为了显得高级而把标题堆得很满。比如你真的就是围绕预测、优化、评价这类方法展开，那标题就老老实实把对象和方法说清楚。这样虽然不花哨，但很适合比赛论文。",
+            ],
+            5,
+            "图 1 这里保留原文中关于摘要样例的截图，主要用来测试图片不要被系统移动到文章开头或结尾。",
+        ),
+        (
+            [
+                "接着说摘要。摘要这部分可以理解成给评委的一张快速小抄。评委不一定有时间从头到尾细读全文，所以摘要里最重要的不是铺垫气氛，而是把“解决了什么问题、用了什么方法、得到了什么结果”讲明白。说白了，就是让别人快速知道你们到底做了什么。",
+                "这里的表达可以稍微口语一点，但内容不能松。比如可以先用两三句话交代问题背景，再说明自己建了什么模型，最后把结果或者结论挑重点写出来。不要把摘要写成引言，也不要写成心得体会。它应该短、准、密度高。",
+            ],
+            8,
+            "图 2 这张图放在摘要说明之后，中间隔了正文，避免和上一张图连在一起。",
+        ),
+        (
+            [
+                "到了问题重述这一步，很多同学会下意识复制题目原文，再稍微换几个词。这个做法其实风险挺高，一方面会显得你没有真正理解问题，另一方面也可能带来查重上的麻烦。更好的方式，是先读懂题目到底在问什么，再用自己的话重新讲一遍。",
+                "比如背景部分不用面面俱到，只要把和建模有关的信息讲清楚就行。要求部分也不需要写得像官方题面那样完整，而是把每个问题的任务梳理出来，让后文建模能自然接上。这个部分越清楚，后面的模型假设、符号说明和问题分析就越不容易散。",
+            ],
+            11,
+            "图 3 这里对应原文中“时间充裕时”的问题重述示例，图片前后都有文字。",
+        ),
+        (
+            [
+                "再往后看，问题分析这部分最容易写成一堆术语。其实它更像是在告诉读者：我为什么准备用这个方法，而不是别的方法。你可以先说题目给了哪些条件，再说这些条件会导向什么类型的问题，最后自然引出后面要建的模型。",
+                "如果题目里有好几个小问，可以按小问展开，但不一定非要写得特别公式化。关键是让读者跟得上你的思路。比如哪些变量会影响结果，哪些约束必须考虑，哪些数据可以直接用，哪些地方需要做合理假设，这些都可以用比较自然的语言说清楚。",
+            ],
+            41,
+            "图 4 这张来自原文后半部分的灵敏度分析示例，特意放在较靠后的段落，测试图片顺序是否会被打乱。",
+        ),
+        (
+            [
+                "最后再看排版和支撑材料。论文内容写完以后，排版也别最后才匆忙处理。图的标题一般放在图下面，表的标题一般放在表上面，公式编号、参考文献、附录这些东西也要统一。它们看起来像细节，但会影响整篇论文的专业感。",
+                "支撑材料也一样，不是随便把文件打个包就完事。能支撑论文结论的数据、代码、结果文件最好整理清楚，和正文里的说法对应上。这样别人复核时能看明白，也能减少“论文写得挺好但材料对不上”的尴尬。",
+            ],
+            67,
+            "图 5 这张放在文档接近结尾的位置，用来检查最后一张图片能否保持在原本附近。",
+        ),
+    ]
+
+    doc = Document()
+    section = doc.sections[0]
+    for margin in ("top_margin", "bottom_margin", "left_margin", "right_margin"):
+        setattr(section, margin, Inches(1))
+
+    normal = doc.styles["Normal"]
+    normal.font.name = "Arial"
+    normal._element.rPr.rFonts.set(qn("w:eastAsia"), "微软雅黑")
+    normal.font.size = Pt(11)
+    normal.paragraph_format.space_after = Pt(8)
+    normal.paragraph_format.line_spacing = 1.15
+
+    title = doc.add_paragraph()
+    title.paragraph_format.space_before = Pt(0)
+    title.paragraph_format.space_after = Pt(3)
+    title_run = title.add_run("数学建模论文写作测试片段")
+    set_font(title_run, size=26, color=RGBColor(0, 0, 0))
+
+    doc.add_paragraph(
+        "这是一份从原始 Word 文档里抽出来的小测试稿，内容不会写成那种很硬的提纲，而是尽量像平时讲课或者复盘时的说法。文档里一共放了五张图片，每张图都插在相关段落附近，中间都有文字隔开，方便后续测试导入、上传和图片位置还原。"
+    )
+
+    for paragraphs, image_id, caption in segments:
+        for paragraph in paragraphs:
+            doc.add_paragraph(paragraph)
+        image = image_map[image_id]
+        image_paragraph = doc.add_paragraph()
+        image_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        image_paragraph.add_run().add_picture(BytesIO(image.data), width=Inches(5.6))
+
+        caption_paragraph = doc.add_paragraph()
+        caption_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        caption_paragraph.paragraph_format.space_after = Pt(12)
+        caption_run = caption_paragraph.add_run(caption)
+        set_font(caption_run, size=9, color=RGBColor(85, 85, 85))
+
+    doc.add_paragraph(
+        "整份测试文档到这里就结束。它的重点不是覆盖原文所有知识点，而是保留一部分真实语境和真实图片，看看系统在处理口语化段落、分散图片和较长正文时，能不能把图片放回该在的位置。"
+    )
+
+    doc.save(OUTPUT)
+    print(OUTPUT)
+
+
+if __name__ == "__main__":
+    main()

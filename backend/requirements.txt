@@ -9,3 +9,5 @@ httpx==0.28.1
 cos-python-sdk-v5==1.9.44
 PyYAML==6.0.2
 pytest==8.4.1
+PyMySQL==1.1.1
+paramiko==3.5.1

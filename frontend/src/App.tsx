@@ -25,17 +25,34 @@ import {
   analyzeDocument,
   createDemo,
   downloadExport,
+  getAdminHistory,
   getConfigStatus,
   getAssetUrl,
+  getCurrentUser,
+  getDocument,
+  getHistory,
+  login,
+  logout,
   processDocument,
 } from './api'
-import type { AiSettings, ConfigStatus, DocumentData } from './types'
+import type { AiSettings, ConfigStatus, CurrentUser, DocumentData } from './types'
 
 type Theme = 'light' | 'dark'
-type PreviewMode = 'original' | 'processed'
+type ExportFormat = 'markdown' | 'hexo' | 'hugo' | 'astro' | 'docx' | 'pdf'
 
 const acceptedExtensions = ['.pdf', '.docx', '.md', '.markdown']
 const steps = ['导入文档', '整理内容', '隐私检查', '导出发布']
+const currentDocumentStorageKey = 'dtb-current-document'
+const historyStorageKey = 'dtb-document-history'
+const historyLimit = 8
+const exportOptions: Array<{ value: ExportFormat; label: string; detail: string }> = [
+  { value: 'markdown', label: '普通 Markdown', detail: '纯正文 Markdown' },
+  { value: 'hexo', label: 'Hexo 博客', detail: 'Hexo front matter' },
+  { value: 'hugo', label: 'Hugo 博客', detail: 'Hugo front matter' },
+  { value: 'astro', label: 'Astro 博客', detail: 'Astro content collection' },
+  { value: 'docx', label: 'Word 文档', detail: 'DOCX 文件' },
+  { value: 'pdf', label: 'PDF 文档', detail: 'PDF 文件' },
+]
 
 function initialTheme(): Theme {
   const saved = localStorage.getItem('dtb-theme')
@@ -43,9 +60,38 @@ function initialTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
+function loadStoredDocument(): DocumentData | null {
+  try {
+    const raw = localStorage.getItem(currentDocumentStorageKey)
+    return raw ? JSON.parse(raw) as DocumentData : null
+  } catch {
+    localStorage.removeItem(currentDocumentStorageKey)
+    return null
+  }
+}
+
+function loadHistory(): DocumentData[] {
+  try {
+    const raw = localStorage.getItem(historyStorageKey)
+    return raw ? JSON.parse(raw) as DocumentData[] : []
+  } catch {
+    localStorage.removeItem(historyStorageKey)
+    return []
+  }
+}
+
+function saveDocumentHistory(data: DocumentData) {
+  const next = [data, ...loadHistory().filter((item) => item.id !== data.id)].slice(0, historyLimit)
+  localStorage.setItem(historyStorageKey, JSON.stringify(next))
+}
+
 function App() {
   const [theme, setTheme] = useState<Theme>(initialTheme)
-  const [documentData, setDocumentData] = useState<DocumentData | null>(null)
+  const [documentData, setDocumentData] = useState<DocumentData | null>(loadStoredDocument)
+  const [history, setHistory] = useState<DocumentData[]>(loadHistory)
+  const [user, setUser] = useState<CurrentUser | null>(null)
+  const [authChecked, setAuthChecked] = useState(false)
+  const [adminView, setAdminView] = useState(false)
   const [config, setConfig] = useState<ConfigStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -58,7 +104,57 @@ function App() {
 
   useEffect(() => {
     getConfigStatus().then(setConfig).catch(() => setConfig(null))
+    getCurrentUser()
+      .then((current) => {
+        setUser(current)
+        return getHistory()
+      })
+      .then((items) => setHistory(items))
+      .catch(() => setUser(null))
+      .finally(() => setAuthChecked(true))
   }, [])
+
+  async function handleLogin(username: string, password: string) {
+    const current = await login(username, password)
+    setUser(current)
+    setAdminView(false)
+    setHistory(await getHistory())
+  }
+
+  async function handleLogout() {
+    await logout().catch(() => undefined)
+    setUser(null)
+    setDocumentData(null)
+    setHistory([])
+    setAdminView(false)
+    localStorage.removeItem(currentDocumentStorageKey)
+    localStorage.removeItem(historyStorageKey)
+  }
+
+  async function toggleAdminView() {
+    const next = !adminView
+    setAdminView(next)
+    setHistory(next ? await getAdminHistory() : await getHistory())
+    setDocumentData(null)
+  }
+
+  useEffect(() => {
+    if (!documentData) return
+    localStorage.setItem(currentDocumentStorageKey, JSON.stringify(documentData))
+    saveDocumentHistory(documentData)
+    setHistory(loadHistory())
+  }, [documentData])
+
+  function updateDocument(data: DocumentData | null) {
+    setDocumentData(data)
+    if (!data) {
+      localStorage.removeItem(currentDocumentStorageKey)
+      return
+    }
+    localStorage.setItem(currentDocumentStorageKey, JSON.stringify(data))
+    saveDocumentHistory(data)
+    setHistory(loadHistory())
+  }
 
   async function handleFile(file: File) {
     const extension = `.${file.name.split('.').pop()?.toLowerCase()}`
@@ -69,7 +165,7 @@ function App() {
     setError('')
     setLoading(true)
     try {
-      setDocumentData(await analyzeDocument(file))
+      updateDocument(await analyzeDocument(file))
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : '文件解析失败。')
     } finally {
@@ -81,7 +177,7 @@ function App() {
     setError('')
     setLoading(true)
     try {
-      setDocumentData(await createDemo())
+      updateDocument(await createDemo())
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : '演示文档加载失败。')
     } finally {
@@ -93,18 +189,26 @@ function App() {
     <div className="app-shell">
       <a className="skip-link" href="#main-content">跳到主要内容</a>
       <Header
+        user={user}
         theme={theme}
         config={config}
         onThemeChange={() => setTheme(theme === 'light' ? 'dark' : 'light')}
         onOpenSettings={() => setSettingsOpen(true)}
-        onReset={documentData ? () => setDocumentData(null) : undefined}
+        onReset={documentData ? () => updateDocument(null) : undefined}
+        onLogout={user ? handleLogout : undefined}
+        onToggleAdminView={user?.role === 'admin' ? toggleAdminView : undefined}
+        adminView={adminView}
       />
       <main id="main-content">
-        {documentData ? (
+        {!authChecked ? (
+          <div className="auth-page"><LoaderCircle className="spin" size={24} /></div>
+        ) : !user ? (
+          <LoginScreen onLogin={handleLogin} />
+        ) : documentData ? (
           <Workspace
             data={documentData}
             error={error}
-            onChange={setDocumentData}
+            onChange={updateDocument}
             onError={setError}
           />
         ) : (
@@ -112,8 +216,15 @@ function App() {
             loading={loading}
             error={error}
             config={config}
+            history={history}
+            adminView={adminView}
             onFile={handleFile}
             onDemo={handleDemo}
+            onRestore={updateDocument}
+            onClearHistory={() => {
+              localStorage.removeItem(historyStorageKey)
+              setHistory([])
+            }}
           />
         )}
       </main>
@@ -124,14 +235,18 @@ function App() {
 }
 
 interface HeaderProps {
+  user: CurrentUser | null
   theme: Theme
   config: ConfigStatus | null
   onThemeChange: () => void
   onOpenSettings: () => void
   onReset?: () => void
+  onLogout?: () => void
+  onToggleAdminView?: () => void
+  adminView: boolean
 }
 
-function Header({ theme, config, onThemeChange, onOpenSettings, onReset }: HeaderProps) {
+function Header({ user, theme, config, onThemeChange, onOpenSettings, onReset, onLogout, onToggleAdminView, adminView }: HeaderProps) {
   return (
     <header className="topbar">
       <div className="topbar-inner">
@@ -141,6 +256,17 @@ function Header({ theme, config, onThemeChange, onOpenSettings, onReset }: Heade
           <span className="brand-beta">BETA</span>
         </button>
         <div className="topbar-actions">
+          {user && <span className="user-badge">{user.role === 'admin' ? '管理员' : '用户'} · {user.username}</span>}
+          {onToggleAdminView && (
+            <button className="button button-ghost header-text-button" type="button" onClick={onToggleAdminView}>
+              {adminView ? '我的历史' : '全部历史'}
+            </button>
+          )}
+          {onLogout && (
+            <button className="button button-ghost header-text-button" type="button" onClick={onLogout}>
+              退出
+            </button>
+          )}
           <div className={`service-status ${config?.mock_mode ? 'is-pending' : 'is-ready'}`}>
             <span className="status-dot" aria-hidden="true" />
             {config?.mock_mode ? '基础模式' : '服务已就绪'}
@@ -162,17 +288,63 @@ function Header({ theme, config, onThemeChange, onOpenSettings, onReset }: Heade
   )
 }
 
+function LoginScreen({ onLogin }: { onLogin: (username: string, password: string) => Promise<void> }) {
+  const [username, setUsername] = useState('demo_user')
+  const [password, setPassword] = useState('123456')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setSubmitting(true)
+    setError('')
+    try {
+      await onLogin(username, password)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : '登录失败')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="auth-page">
+      <form className="auth-card" onSubmit={submit}>
+        <div>
+          <span className="panel-kicker"><KeyRound size={15} /> 登录</span>
+          <h1>DraftToBlog</h1>
+        </div>
+        <label htmlFor="login-username">用户名</label>
+        <input id="login-username" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
+        <label htmlFor="login-password">密码</label>
+        <input id="login-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
+        {error && <div className="inline-error" role="alert"><AlertCircle size={17} />{error}</div>}
+        <button className="button button-primary button-wide" type="submit" disabled={submitting}>
+          {submitting ? <LoaderCircle className="spin" size={18} /> : <KeyRound size={18} />}
+          登录
+        </button>
+        <small>普通用户 demo_user / 123456；管理员 admin / admin123456</small>
+      </form>
+    </div>
+  )
+}
+
 interface LandingProps {
   loading: boolean
   error: string
   config: ConfigStatus | null
+  history: DocumentData[]
+  adminView: boolean
   onFile: (file: File) => void
   onDemo: () => void
+  onRestore: (data: DocumentData) => void
+  onClearHistory: () => void
 }
 
-function Landing({ loading, error, config, onFile, onDemo }: LandingProps) {
+function Landing({ loading, error, config, history, adminView, onFile, onDemo, onRestore, onClearHistory }: LandingProps) {
   return (
     <div className="landing-page">
+      {adminView && <div className="admin-history-note">正在查看所有用户的历史记录</div>}
       <section className="hero" aria-labelledby="hero-title">
         <div className="hero-copy">
           <div className="eyebrow"><Sparkles size={16} /> 让工作沉淀真正成为内容资产</div>
@@ -192,6 +364,28 @@ function Landing({ loading, error, config, onFile, onDemo }: LandingProps) {
         <span><KeyRound size={17} /> API Key 不写入应用日志</span>
         <span className="config-summary">AI {config?.official_ai_ready ? '已配置' : '待配置'} · COS {config?.cos_ready ? '已配置' : '待配置'}</span>
       </section>
+      {history.length > 0 && (
+        <section className="history-panel" aria-label="历史记录">
+          <div className="history-header">
+            <div>
+              <span className="step-kicker">历史记录</span>
+              <h2>最近处理的文档</h2>
+            </div>
+            <button className="text-button" type="button" onClick={onClearHistory}>清空历史</button>
+          </div>
+          <div className="history-list">
+            {history.map((item) => (
+              <button className="history-item" type="button" key={item.id} onClick={() => onRestore(item)}>
+                <span>
+                  <strong>{item.filename}</strong>
+                  <small>{statusLabel(item.status)} · {item.progress_percent ?? 0}% · {item.stats.characters.toLocaleString()} 字符 · {item.stats.images} 张图片</small>
+                </span>
+                <ArrowRight size={16} />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -269,9 +463,9 @@ interface WorkspaceProps {
 function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
   const [selectedFindings, setSelectedFindings] = useState(() => new Set(data.findings.map((item) => item.id)))
   const [improveStructure, setImproveStructure] = useState(true)
-  const [previewMode, setPreviewMode] = useState<PreviewMode>(data.status === 'processed' ? 'processed' : 'original')
   const [processing, setProcessing] = useState(false)
   const [exporting, setExporting] = useState<string | null>(null)
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('hexo')
 
   async function runProcess() {
     setProcessing(true)
@@ -279,9 +473,16 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
     try {
       const savedAiConfig = sessionStorage.getItem('dtb-ai-settings')
       const aiConfig = savedAiConfig ? JSON.parse(savedAiConfig) as AiSettings : undefined
-      const result = await processDocument(data.id, [...selectedFindings], improveStructure, aiConfig)
+      let result = await processDocument(data.id, [...selectedFindings], improveStructure, aiConfig)
       onChange(result)
-      setPreviewMode('processed')
+      while (result.status === 'processing') {
+        await new Promise((resolve) => window.setTimeout(resolve, 1500))
+        result = await getDocument(data.id)
+        onChange(result)
+      }
+      if (result.status === 'failed') {
+        onError(result.error_message || '处理失败，请重试。')
+      }
     } catch (requestError) {
       onError(requestError instanceof Error ? requestError.message : '处理失败，请重试。')
     } finally {
@@ -289,7 +490,7 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
     }
   }
 
-  async function runExport(format: 'markdown' | 'hexo' | 'hugo' | 'docx' | 'pdf') {
+  async function runExport(format: ExportFormat) {
     setExporting(format)
     onError('')
     try {
@@ -311,7 +512,6 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
   }
 
   const currentStep = data.status === 'processed' ? 3 : 2
-  const preview = previewMode === 'original' ? data.original_content : data.processed_content
 
   return (
     <div className="workspace-page">
@@ -357,35 +557,31 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
               <span className="panel-kicker"><FileText size={15} /> 文档预览</span>
               <h2>内容与修改结果</h2>
             </div>
-            <div className="segmented" role="group" aria-label="预览版本">
-              <button type="button" className={previewMode === 'original' ? 'is-active' : ''} onClick={() => setPreviewMode('original')}>原文</button>
-              <button type="button" className={previewMode === 'processed' ? 'is-active' : ''} onClick={() => setPreviewMode('processed')} disabled={data.status !== 'processed'}>整理后</button>
-            </div>
           </div>
-          <article className="document-preview" aria-label={`${previewMode === 'original' ? '原始' : '整理后'}文档内容`}>
-            {preview.split('\n').map((line, index) => <PreviewLine key={`${index}-${line.slice(0, 8)}`} line={line} />)}
-            {data.assets.length > 0 && (
-              <section className="document-images" aria-label="文档图片">
-                <h3>文档图片</h3>
-                <div className="document-image-grid">
-                  {data.assets.map((asset) => (
-                    <figure key={asset.filename}>
-                      <img
-                        src={asset.url || getAssetUrl(data.id, asset.filename)}
-                        alt={asset.filename}
-                        loading="lazy"
-                      />
-                      <figcaption>
-                        {asset.filename}
-                        {asset.status === 'uploaded' && <span>已上传</span>}
-                        {asset.status === 'failed' && <span className="image-failed">上传失败</span>}
-                      </figcaption>
-                    </figure>
-                  ))}
-                </div>
-              </section>
-            )}
-          </article>
+          <div className="comparison-grid" aria-label="整理前后内容对比">
+            <article className="document-preview comparison-document" aria-label="整理前文档内容">
+              <div className="comparison-label">整理前</div>
+              {data.original_content.split('\n').map((line, index) => (
+                <PreviewLine
+                  key={`original-${index}-${line.slice(0, 8)}`}
+                  line={line}
+                  documentId={data.id}
+                  assets={data.assets}
+                />
+              ))}
+            </article>
+            <article className="document-preview comparison-document" aria-label="整理后文档内容">
+              <div className="comparison-label">整理后</div>
+              {data.processed_content.split('\n').map((line, index) => (
+                <PreviewLine
+                  key={`processed-${index}-${line.slice(0, 8)}`}
+                  line={line}
+                  documentId={data.id}
+                  assets={data.assets}
+                />
+              ))}
+            </article>
+          </div>
         </div>
 
         <aside className="control-panel panel" aria-label="处理选项">
@@ -427,6 +623,15 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
             {processing ? '正在整理…' : data.status === 'processed' ? '重新应用设置' : '生成发布版本'}
           </button>
 
+          {(processing || data.status === 'processing' || data.status === 'failed') && (
+            <div className={`task-progress task-progress-${data.status}`} role="status" aria-live="polite">
+              <div className="task-progress-bar">
+                <span style={{ width: `${Math.max(0, Math.min(100, data.progress_percent ?? 0))}%` }} />
+              </div>
+              <small>{data.progress_message || statusLabel(data.status)} · {data.progress_percent ?? 0}%</small>
+            </div>
+          )}
+
           {error && (
             <div className="processing-error" role="alert" aria-live="assertive">
               <AlertCircle size={19} />
@@ -440,14 +645,26 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
 
           <div className="export-section">
             <div className="section-title-row"><div><h3>导出文件</h3><span>可随时导出当前结果</span></div><Download size={19} /></div>
-            <div className="export-grid">
-              {(['markdown', 'hexo', 'hugo', 'docx', 'pdf'] as const).map((format) => (
-                <button key={format} type="button" onClick={() => runExport(format)} disabled={Boolean(exporting)}>
-                  {exporting === format ? <LoaderCircle className="spin" size={17} /> : <Download size={17} />}
-                  {format === 'markdown' ? 'Markdown' : format === 'hexo' ? 'Hexo MD' : format === 'hugo' ? 'Hugo MD' : format.toUpperCase()}
-                </button>
-              ))}
+            <div className="export-picker">
+              <label htmlFor="export-format">输出格式</label>
+              <select
+                id="export-format"
+                value={exportFormat}
+                onChange={(event) => setExportFormat(event.target.value as ExportFormat)}
+                disabled={Boolean(exporting)}
+              >
+                {exportOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <small>{exportOptions.find((option) => option.value === exportFormat)?.detail}</small>
             </div>
+            <button className="button button-primary button-wide export-action" type="button" onClick={() => runExport(exportFormat)} disabled={Boolean(exporting)}>
+              {exporting ? <LoaderCircle className="spin" size={18} /> : <Download size={18} />}
+              {exporting ? '正在导出...' : '导出当前格式'}
+            </button>
           </div>
         </aside>
       </section>
@@ -455,16 +672,108 @@ function Workspace({ data, error, onChange, onError }: WorkspaceProps) {
   )
 }
 
-function PreviewLine({ line }: { line: string }) {
+function PreviewLine({
+  line,
+  documentId,
+  assets,
+}: {
+  line: string
+  documentId: string
+  assets: DocumentData['assets']
+}) {
   const heading = line.match(/^(#{1,6})\s+(.+)$/)
   if (heading) {
     const level = Math.min(heading[1].length + 1, 6)
     const Tag = `h${level}` as keyof JSX.IntrinsicElements
-    return <Tag>{heading[2]}</Tag>
+    return <Tag>{renderInlineMarkdown(heading[2])}</Tag>
   }
+  const imageOnly = resolvePreviewImage(line.trim(), documentId, assets)
+  if (imageOnly) return <PreviewImage image={imageOnly} />
+
+  const inlineImages = [...line.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)]
+  if (inlineImages.length) {
+    const nodes: React.ReactNode[] = []
+    let lastIndex = 0
+    inlineImages.forEach((match, index) => {
+      const before = line.slice(lastIndex, match.index)
+      if (before.trim()) nodes.push(<p key={`text-${index}`}>{renderInlineMarkdown(before)}</p>)
+      nodes.push(<PreviewImage key={`image-${index}`} image={resolveMarkdownImage(match[1], match[2], documentId, assets)} />)
+      lastIndex = (match.index ?? 0) + match[0].length
+    })
+    const after = line.slice(lastIndex)
+    if (after.trim()) nodes.push(<p key="text-after">{renderInlineMarkdown(after)}</p>)
+    return <>{nodes}</>
+  }
+
   if (!line.trim()) return <span className="preview-space" aria-hidden="true" />
-  if (line.startsWith('> ')) return <blockquote>{line.slice(2)}</blockquote>
-  return <p>{line}</p>
+  if (line.startsWith('> ')) return <blockquote>{renderInlineMarkdown(line.slice(2))}</blockquote>
+  return <p>{renderInlineMarkdown(line)}</p>
+}
+
+function statusLabel(status: DocumentData['status']) {
+  if (status === 'processed') return '已生成'
+  if (status === 'processing') return '生成中'
+  if (status === 'failed') return '生成失败'
+  return '待整理'
+}
+
+function PreviewImage({ image }: { image: { src: string; alt: string; caption?: string } }) {
+  return (
+    <figure className="preview-image">
+      <img src={image.src} alt={image.alt} loading="lazy" />
+      {(image.caption || image.alt) && <figcaption>{image.caption || image.alt}</figcaption>}
+    </figure>
+  )
+}
+
+function resolvePreviewImage(line: string, documentId: string, assets: DocumentData['assets']) {
+  const markdownImage = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
+  if (markdownImage) return resolveMarkdownImage(markdownImage[1], markdownImage[2], documentId, assets)
+
+  const marker = line.match(/^\[IMG_(\d+)\]$/)
+  if (marker) {
+    const asset = assets[Number(marker[1])]
+    if (asset) return assetPreviewImage(asset, documentId)
+  }
+
+  const filename = line.match(/^(image-(\d+)\.(?:png|jpe?g|gif|webp|bmp))$/i)
+  if (filename) {
+    const asset = assets.find((item) => item.filename.toLowerCase() === filename[1].toLowerCase())
+      || assets[Number(filename[2]) - 1]
+    if (asset) return assetPreviewImage(asset, documentId)
+  }
+
+  return null
+}
+
+function resolveMarkdownImage(alt: string, src: string, documentId: string, assets: DocumentData['assets']) {
+  const filename = src.match(/([^/\\]+)$/)?.[1] ?? ''
+  const asset = assets.find((item) => item.filename.toLowerCase() === filename.toLowerCase())
+  if (asset) return assetPreviewImage(asset, documentId)
+  return { src, alt: alt || filename || '文档图片', caption: alt || filename || undefined }
+}
+
+function assetPreviewImage(asset: DocumentData['assets'][number], documentId: string) {
+  return {
+    src: getAssetUrl(documentId, asset.filename),
+    alt: asset.filename,
+    caption: asset.filename,
+  }
+}
+
+function renderInlineMarkdown(text: string) {
+  const nodes: React.ReactNode[] = []
+  const pattern = /(\*\*([^*]+)\*\*|`([^`]+)`)/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index))
+    if (match[2]) nodes.push(<strong key={match.index}>{match[2]}</strong>)
+    else if (match[3]) nodes.push(<code key={match.index}>{match[3]}</code>)
+    lastIndex = pattern.lastIndex
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex))
+  return nodes
 }
 
 function StatCard({ label, value, emphasized = false }: { label: string; value: string; emphasized?: boolean }) {

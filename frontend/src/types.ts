@@ -21,9 +21,13 @@ export interface DocumentStats {
 
 export interface DocumentData {
   id: string
+  user_id?: number
+  username?: string
   filename: string
   source_type: 'markdown' | 'docx' | 'pdf'
-  status: 'ready' | 'processed'
+  status: 'ready' | 'processing' | 'processed' | 'failed'
+  progress_percent: number
+  progress_message: string
   original_content: string
   processed_content: string
   stats: DocumentStats
@@ -37,6 +41,10 @@ export interface DocumentData {
     provider: string
     error: string
   }>
+  error_message?: string
+  created_at?: string
+  updated_at?: string
+  completed_at?: string
 }
 
 export interface ConfigStatus {
@@ -55,4 +63,11 @@ export interface AiSettings {
   baseUrl: string
   apiKey: string
   model: string
+}
+
+export interface CurrentUser {
+  id: number
+  username: string
+  display_name: string
+  role: 'user' | 'admin'
 }

@@ -7,7 +7,7 @@ from docx.shared import Inches
 
 from app.main import app
 from app.services import document_service
-from app.services.ai_service import AIServiceError
+from app.services.ai_service import AIConnection, AIServiceError
 
 import pytest
 
@@ -17,6 +17,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def stub_ai(monkeypatch: pytest.MonkeyPatch) -> None:
+    client.post("/api/auth/login", json={"username": "demo_user", "password": "123456"})
     monkeypatch.setattr(
         document_service,
         "improve_article",
@@ -55,10 +56,14 @@ def test_markdown_workflow() -> None:
     assert "138****5678" in processed.json()["processed_content"]
     assert processed.json()["processed_content"].startswith("# AI 整理结果")
 
-    for format_name in ("markdown", "hexo", "hugo", "docx", "pdf"):
+    for format_name in ("markdown", "hexo", "hugo", "astro", "docx", "pdf"):
         exported = client.get(f"/api/documents/{payload['id']}/export/{format_name}")
         assert exported.status_code == 200
         assert exported.content
+        if format_name == "markdown":
+            assert ".md" in exported.headers["content-disposition"]
+        if format_name in {"hexo", "hugo", "astro"}:
+            assert f".{format_name}.md" in exported.headers["content-disposition"]
 
 
 def test_rejects_unsupported_file() -> None:
@@ -118,7 +123,15 @@ def test_ai_failure_returns_specific_error(monkeypatch: pytest.MonkeyPatch) -> N
     ).json()
     response = client.post(
         f"/api/documents/{analyzed['id']}/process",
-        json={"finding_ids": [], "improve_structure": True},
+        json={
+            "finding_ids": [],
+            "improve_structure": True,
+            "ai_config": {
+                "base_url": "https://api.example.com/v1",
+                "api_key": "test-key",
+                "model": "test-model",
+            },
+        },
     )
     assert response.status_code == 502
     assert response.json()["detail"] == "服务超时"

@@ -152,7 +152,7 @@ def inject_asset_images(content: str, assets: list[dict]) -> str:
     if not assets:
         return content
 
-    used: set[int] = set()
+    used: list[int] = []
 
     def image_markdown(index: int) -> str:
         if index >= len(assets):
@@ -164,22 +164,45 @@ def inject_asset_images(content: str, assets: list[dict]) -> str:
 
     def replace(match: re.Match[str]) -> str:
         index = int(match.group(1))
-        used.add(index)
+        used.append(index)
         return image_markdown(index)
 
     rendered = re.sub(r"\[IMG_(\d+)\]", replace, content)
-    missed = [index for index, _ in enumerate(assets) if index not in used]
+    rendered_urls = set(re.findall(r"!\[[^\]]*]\((https?://[^)]+)\)", rendered))
+    missed = [index for index, _ in enumerate(assets) if index not in set(used)]
     if missed:
-        rendered = rendered.rstrip() + "\n\n" + "\n\n".join(image_markdown(index) for index in missed)
+        fallback_images: list[str] = []
+        for index in missed:
+            url = assets[index].get("url") or ""
+            if url and url in rendered_urls:
+                continue
+            fallback_images.append(image_markdown(index))
+            if url:
+                rendered_urls.add(url)
+        if fallback_images:
+            rendered = rendered.rstrip() + "\n\n" + "\n\n".join(fallback_images)
     return rendered
+
+
+def normalize_published_markdown(content: str) -> str:
+    content = _remove_generated_footer(content)
+    content = _remove_transient_image_placeholders(content)
+    content = _remove_editorial_notes(content)
+    content = _remove_chunk_titles(content)
+    content = _normalize_heading_levels(content)
+    content = _dedupe_markdown_images(content)
+    content = _repair_emphasis_markers(content)
+    content = re.sub(r"\n{3,}", "\n\n", content).strip()
+    return content
 
 
 def render_blog_markdown(
     body: str,
     filename: str,
     assets: list[dict],
-    preset: Literal["hexo", "hugo"] = "hexo",
+    preset: Literal["hexo", "hugo", "astro"] = "hexo",
 ) -> str:
+    body = normalize_published_markdown(body)
     title = _first_markdown_title(body) or Path(filename).stem
     description = _description_from_body(body)
     categories, tags = _infer_taxonomy(body, filename)
@@ -198,6 +221,18 @@ def render_blog_markdown(
         }
         if cover:
             front_matter["cover"] = {"image": cover}
+    elif preset == "astro":
+        date_value = now.strftime("%Y-%m-%dT%H:%M:%S+08:00")
+        front_matter = {
+            "title": title,
+            "pubDate": date_value,
+            "updatedDate": date_value,
+            "description": description,
+            "tags": tags,
+            "categories": categories,
+        }
+        if cover:
+            front_matter["image"] = cover
     else:
         date_value = now.strftime("%Y-%m-%d %H:%M:%S")
         front_matter = {
@@ -213,6 +248,12 @@ def render_blog_markdown(
 
     yaml_text = yaml.dump(front_matter, allow_unicode=True, sort_keys=False, default_flow_style=False).rstrip()
     return f"---\n{yaml_text}\n---\n\n{body.strip()}\n"
+
+
+def title_stem_from_markdown(content: str, fallback_filename: str) -> str:
+    normalized = normalize_published_markdown(content)
+    title = _first_markdown_title(normalized) or Path(fallback_filename).stem
+    return _safe_filename_stem(title)
 
 
 def _parse_docx_paragraph(
@@ -331,12 +372,144 @@ def _first_markdown_title(body: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def _safe_filename_stem(value: str) -> str:
+    stem = re.sub(r"[^\w\-\u4e00-\u9fff]+", "-", value).strip("-")
+    return stem[:80] or "draft-to-blog"
+
+
 def _description_from_body(body: str) -> str:
+    title = _first_markdown_title(body)
     plain = re.sub(r"```.*?```", "", body, flags=re.S)
     plain = re.sub(r"!\[[^\]]*]\([^)]+\)", "", plain)
-    plain = re.sub(r"^#+\s*", "", plain, flags=re.M)
-    plain = re.sub(r"\s+", " ", plain).strip()
-    return plain[:150]
+    plain = re.sub(r"^\s*\[IMG_\d+]\s*$", "", plain, flags=re.M)
+    lines = [_plain_description_line(line) for line in plain.splitlines()]
+    title_key = _description_key(title)
+    lines = [line for line in lines if line and _description_key(line) != title_key]
+    topics = _extract_description_topics(lines)
+    if title and topics:
+        joined_topics = "、".join(topics[:4])
+        return f"本文围绕《{title}》，系统梳理{joined_topics}等核心内容，帮助读者快速理解文章脉络与实践要点。"[:150]
+    if title:
+        return f"本文围绕《{title}》展开整理，提炼核心观点、结构脉络和实践要点，便于阅读、复盘与发布。"[:150]
+    plain_text = re.sub(r"\s+", " ", " ".join(lines)).strip()
+    return plain_text[:150]
+
+
+def _plain_description_line(line: str) -> str:
+    line = line.strip()
+    if not line or re.match(r"^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$", line):
+        return ""
+    if line.startswith("|"):
+        return ""
+    line = re.sub(r"^#+\s*", "", line)
+    line = re.sub(r"^\s*(?:[-*+]|\d+[.)、])\s+", "", line)
+    line = re.sub(r"[*_`>#|\\[\]()]+", " ", line)
+    return re.sub(r"\s+", " ", line).strip()
+
+
+def _extract_description_topics(lines: list[str]) -> list[str]:
+    topics: list[str] = []
+    for line in lines:
+        candidate = line.strip("：:。；;，, ")
+        if not candidate:
+            continue
+        if "：" in candidate or ":" in candidate:
+            topic = re.split(r"[:：]", candidate, maxsplit=1)[0].strip()
+            if not re.search(r"[\u4e00-\u9fff]", topic):
+                continue
+        elif len(candidate) <= 24 and not re.search(r"[。！？.!?]", candidate):
+            topic = candidate
+        else:
+            continue
+        topic = re.sub(r"^[^\w\u4e00-\u9fff]+", "", topic).strip()
+        if 2 <= len(topic) <= 24 and topic not in topics:
+            topics.append(topic)
+        if len(topics) >= 4:
+            break
+    return topics
+
+
+def _description_key(value: str) -> str:
+    return re.sub(r"[\W_]+", "", value).lower()
+
+
+def _remove_generated_footer(content: str) -> str:
+    content = re.sub(
+        r"\n*\s*---\s*\n\s*>\s*本文由\s*DraftToBlog\s*完成格式整理与隐私检查，请在发布前人工复核。?\s*$",
+        "",
+        content,
+    )
+    return re.sub(r"(?m)^>\s*本文由\s*DraftToBlog\s*完成格式整理与隐私检查，请在发布前人工复核。?\s*$", "", content)
+
+
+def _remove_transient_image_placeholders(content: str) -> str:
+    content = re.sub(r"(?m)^@@DTBIMAGE\d+:[A-Za-z0-9_-]*@@[ \t]*$", "", content)
+    content = re.sub(r"@@DTBIMAGE\d+:[A-Za-z0-9_-]*@@", "", content)
+    content = re.sub(r"(?m)^draft-to-blog://[^\s)]+[ \t]*$", "", content)
+    return re.sub(r"draft-to-blog://[^\s)]+", "", content)
+
+
+def _remove_editorial_notes(content: str) -> str:
+    blocked = (
+        r"(以下是|下面是|整理结果|改写结果|注[:：]|备注[:：]|此部分原文|此部分内容|"
+        r"非常好|我将|我会|作为AI|作为 AI|本文由AI|本文由 AI)"
+    )
+    lines = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if re.search(blocked, stripped, re.I):
+            continue
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _remove_chunk_titles(content: str) -> str:
+    lines: list[str] = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if re.search(r"(第[一二三四五六七八九十\d]+部分|part\s+\d+)", stripped, re.I):
+            cleaned = re.sub(r"[（(]?\s*第[一二三四五六七八九十\d]+部分\s*[)）]?", "", line)
+            cleaned = re.sub(r"[（(]?\s*part\s+\d+\s*[)）]?", "", cleaned, flags=re.I)
+            if re.match(r"^#+\s*$", cleaned.strip()):
+                continue
+            line = cleaned.rstrip()
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _normalize_heading_levels(content: str) -> str:
+    seen_h1 = False
+    lines: list[str] = []
+    for line in content.splitlines():
+        if line.startswith("# "):
+            if seen_h1:
+                lines.append("#" + line)
+            else:
+                seen_h1 = True
+                lines.append(line)
+        else:
+            lines.append(line)
+    return "\n".join(lines)
+
+
+def _dedupe_markdown_images(content: str) -> str:
+    seen_urls: set[str] = set()
+    lines: list[str] = []
+    for line in content.splitlines():
+        match = re.match(r"^!\[[^\]]*]\((https?://[^)]+)\)\s*$", line.strip())
+        if match:
+            url = match.group(1)
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _repair_emphasis_markers(content: str) -> str:
+    content = re.sub(r"\*\*([^*\n]+)\*(?=[:：，,。；;\s]|$)", r"**\1**", content)
+    content = re.sub(r"(?<!\*)\*([^*\n]{1,60})\*\*(?=[:：，,。；;\s]|$)", r"**\1**", content)
+    return content
 
 
 def _infer_taxonomy(body: str, filename: str) -> tuple[list[str], list[str]]:

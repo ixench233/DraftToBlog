@@ -26,15 +26,23 @@ class DocumentStats(BaseModel):
 
 class DocumentResponse(BaseModel):
     id: str
+    user_id: int | None = None
+    username: str = ""
     filename: str
     source_type: Literal["markdown", "docx", "pdf"]
-    status: Literal["ready", "processed"]
+    status: Literal["ready", "processing", "processed", "failed"]
+    progress_percent: int = 0
+    progress_message: str = ""
     original_content: str
     processed_content: str
     stats: DocumentStats
     findings: list[Finding]
     warnings: list[str] = Field(default_factory=list)
     assets: list["Asset"] = Field(default_factory=list)
+    error_message: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+    completed_at: str = ""
 
 
 class Asset(BaseModel):
@@ -56,6 +64,18 @@ class ProcessRequest(BaseModel):
     finding_ids: list[str] = Field(default_factory=list)
     improve_structure: bool = True
     ai_config: AIConfig | None = None
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class CurrentUser(BaseModel):
+    id: int
+    username: str
+    display_name: str
+    role: Literal["user", "admin"]
 
 
 class ConfigStatus(BaseModel):

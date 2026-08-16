@@ -19,15 +19,15 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer
 
-from .blog_service import render_blog_markdown
+from .blog_service import normalize_published_markdown, render_blog_markdown, title_stem_from_markdown
 
 
 MARKDOWN_IMAGE = re.compile(r"^!\[([^]]*)\]\((https?://[^)]+)\)$")
 
 
 def export_document(payload: dict, format_name: str) -> tuple[bytes, str, str]:
-    content = payload["processed_content"]
-    stem = _safe_stem(payload["filename"])
+    content = normalize_published_markdown(payload["processed_content"])
+    stem = title_stem_from_markdown(content, payload["filename"])
     if format_name == "markdown":
         return content.encode("utf-8"), f"{stem}.md", "text/markdown; charset=utf-8"
     if format_name == "hexo":
@@ -36,6 +36,9 @@ def export_document(payload: dict, format_name: str) -> tuple[bytes, str, str]:
     if format_name == "hugo":
         blog = render_blog_markdown(content, payload["filename"], payload.get("assets", []), "hugo")
         return blog.encode("utf-8"), f"{stem}.hugo.md", "text/markdown; charset=utf-8"
+    if format_name == "astro":
+        blog = render_blog_markdown(content, payload["filename"], payload.get("assets", []), "astro")
+        return blog.encode("utf-8"), f"{stem}.astro.md", "text/markdown; charset=utf-8"
     if format_name == "docx":
         return _to_docx(content), f"{stem}.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     if format_name == "pdf":
